@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -10,25 +11,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Areskiko/chattr/slib"
+	pb "github.com/areskiko/thatch/proto"
 )
 
 var (
-	username      string       = "ares#0000"
-	connected     bool         = false
+	username      string       = "nordmann#0000"
 	mainPort      uint16       = 8001
 	discoveryPort uint16       = 8000
 	subnetMask    uint8        = 24
-	chats         []*slib.Chat = make([]*slib.Chat, 0)
+	chats         []pb.Chat = make([]pb.Chat, 0)
 	chatsMutex    sync.Mutex
-	users         []User = make([]User, 0)
+	users         []pb.User = make([]pb.User, 0)
 	usersMutex    sync.Mutex
 )
-
-type User struct {
-	name    string
-	address net.Addr
-}
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
@@ -136,7 +131,7 @@ func reachOut(address net.Addr) {
 	}
 
 	usersMutex.Lock()
-	users = append(users, User{name: user, address: addr})
+	users = append(users, slib.NewUser(user, addr))
 	usersMutex.Unlock()
 }
 
@@ -193,20 +188,32 @@ func controll() {
 			continue
 		}
 
-		_, err = conn.Read(buffer)
-		if err != nil {
-			fmt.Println("Error reading command", err)
-			continue
-		}
+		defer conn.Close()
 
-		// TODO: handle commands
-		content := string(buffer)
-		conn.Write([]byte(fmt.Sprintf("Received: %s", content)))
+		for {
+
+			_, err = conn.Read(buffer)
+			if err != nil {
+				fmt.Println("Error reading command", err)
+				break
+			}
+
+			// TODO: handle commands
+			content := string(buffer)
+			conn.Write([]byte(fmt.Sprintf("Received: %s", content)))
+
+		}
 
 	}
 }
 
 func main() {
+
+	username = *flag.String("u", "nordmann", "Username to display for others")
+	mainPort = uint16(*flag.Uint("p", 8001, "The port used to communicate with other users"))
+	discoveryPort = uint16(*flag.Uint("d", 8000, "The port others can use to discover you"))
+	subnetMask = uint8(*flag.Uint("m", 24, "The subnet mask"))
+
 	log.Println("Service started")
 	go listenForConnections()
 	go makeDiscoverable()

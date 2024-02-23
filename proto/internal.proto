@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package internal;
+
+option go_package = "github.com/areskiko/thatch/proto";
+
+service Server {
+	rpc GetUsers(Empty) returns (Users) {}
+
+	rpc GetChats(Empty) returns (ChatIds) {}
+	rpc GetChat(GetChatRequest) returns (Chat) {}
+
+
+}
+
+message Empty {}
+
+message User {
+	string id = 1;
+	string name = 2;
+}
+
+message Users {
+	repeated User users = 1;
+}
+
+message Message {
+	string sender = 1;
+	string text = 2;
+}
+
+message Chat {
+	string id = 1;
+	repeated Message messages = 2;
+}
+
+message GetChatRequest {
+	string chat_id = 1;
+}
+
+message ChatIds {
+	repeated string chat_ids = 1;
+}
