@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package external;
+
+option go_package = "github.com/areskiko/thatch/proto/external";
+
+service External {
+	rpc Send(Message) returns (Empty) {}
+}
+
+message Empty {}
+
+message Message {
+	string message = 1;
+}

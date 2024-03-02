@@ -1,40 +1,41 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	pb "github.com/areskiko/thatch/proto/intra"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	pb "github.com/areskiko/thatch/proto"
+	"google.golang.org/grpc"
 )
 
 const TRUNCATION_LENGTH = 10
+const SOCKET = "/tmp/thatch.sock"
 
 /* Creating new chats */
 
 type Id string
 
 type Available struct {
-	username string
-	bio      string
-	id       Id
+	user *pb.User
 }
 
 func (a Available) FilterValue() string {
-	return a.username
+	return a.user.GetName()
 }
 
 func (a Available) Title() string {
-	return a.username
+	return a.user.GetName()
 }
 
 func (a Available) Description() string {
-	return a.bio
+	return ""
 }
 
 /* Interacting with chats */
@@ -45,35 +46,19 @@ type Message struct {
 }
 
 type Chat struct {
-	username string
-	messages []Message
-	id       Id
+	id string
 }
 
 func (a Chat) FilterValue() string {
-	return a.username
+	return a.id
 }
 
 func (a Chat) Title() string {
-	return a.username
+	return a.id
 }
 
 func (a Chat) Description() string {
-	last := a.messages[len(a.messages)-1].content
-	var truncated string
-
-	if len(last) > TRUNCATION_LENGTH {
-		var truncated_builder strings.Builder
-		for i := 0; i < TRUNCATION_LENGTH-3; i++ {
-			truncated_builder.WriteByte(last[i])
-		}
-		truncated_builder.WriteString("...")
-		truncated = truncated_builder.String()
-	} else {
-		truncated = last
-	}
-
-	return truncated
+	return ""
 }
 
 /* App */
@@ -99,7 +84,10 @@ type Model struct {
 	available_users list.Model
 	existing_chats  list.Model
 	err             error
+	client          pb.InternalClient
 }
+
+type ConnectedMessage struct{}
 
 func New() *Model {
 	return &Model{}
@@ -107,27 +95,10 @@ func New() *Model {
 
 func (m *Model) initList(width int, height int) {
 	m.available_users = list.New([]list.Item{}, list.NewDefaultDelegate(), width, height)
-	m.available_users.Title = "Available users"
-	m.available_users.SetItems([]list.Item{
-		Available{username: "User1", bio: "Cool bio 1", id: "1"},
-		Available{username: "User2", bio: "Cool bio 2", id: "2"},
-		Available{username: "User3", bio: "Cool bio 3", id: "3"},
-		Available{username: "User4", bio: "Cool bio 4", id: "4"},
-		Available{username: "User5", bio: "Cool bio 5", id: "5"},
-	})
+	m.available_users.Title = "Available Users"
 
 	m.existing_chats = list.New([]list.Item{}, list.NewDefaultDelegate(), width, height)
 	m.existing_chats.Title = "Active Chats"
-	m.existing_chats.SetItems([]list.Item{
-		Chat{
-			username: "User1",
-			messages: []Message{{content: "Cool story 1", sender: "1"}, {content: "This is a message", sender: "1"}, {content: "This is my reply", sender: "0"}, {content: "A follow up", sender: "1"}},
-			id:       "1"},
-		Chat{
-			username: "User2",
-			messages: []Message{{content: "Cool story 2", sender: "2"}, {content: "This is a message", sender: "2"}},
-			id:       "2"},
-	})
 
 	ta := textarea.New()
 	ta.Placeholder = "Send a message..."
@@ -149,9 +120,103 @@ func (m *Model) initList(width int, height int) {
 }
 
 func (m Model) Init() tea.Cmd {
-	// TODO: Connect to server
 	// TODO: Spawn server if doesn't exist
-	return nil
+	connect := func() tea.Msg {
+
+		var opts []grpc.DialOption
+
+		conn, err := grpc.Dial(SOCKET, opts...)
+		if err != nil {
+			m.err = err
+		}
+
+		client := pb.NewInternalClient(conn)
+		m.client = client
+		return ConnectedMessage{}
+	}
+
+	return tea.Batch(connect)
+}
+
+func fetchAvailableUsers(m *Model) func() tea.Msg {
+	return func() tea.Msg {
+		users, err := m.client.GetUsers(context.Background(), &pb.Empty{})
+		if err != nil {
+			m.err = err
+		}
+
+		items := make([]list.Item, len(users.GetUsers()))
+		for _, user := range users.Users {
+			available := Available{
+				user: user,
+			}
+			items = append(items, available)
+		}
+		m.available_users.SetItems(items)
+
+		return nil
+	}
+}
+
+func fetchExistingChats(m *Model) func() tea.Msg {
+	return func() tea.Msg {
+		chats, err := m.client.GetChats(context.Background(), &pb.Empty{})
+		if err != nil {
+			m.err = err
+		}
+
+		items := make([]list.Item, len(chats.GetChatIds()))
+		for _, chatId := range chats.GetChatIds() {
+			chat := Chat{
+				id: chatId,
+			}
+			items = append(items, chat)
+		}
+		m.existing_chats.SetItems(items)
+
+		return nil
+	}
+}
+
+func loadChat(m *Model) func() tea.Msg {
+	return func() tea.Msg {
+		result, err := m.client.GetChat(context.Background(), &pb.GetChatRequest{ChatId: m.existing_chats.Items()[m.chat_index].(Chat).id})
+		if err != nil {
+			m.err = err
+		}
+
+		messages := make([]string, len(result.GetMessages()))
+		for _, message := range result.GetMessages() {
+			messages = append(messages, fmt.Sprintf("%s: %s", message.GetSender(), message.GetText()))
+		}
+		m.chat_viewport.SetContent(strings.Join(messages, "\n"))
+		m.chat_viewport.GotoBottom()
+
+		return nil
+	}
+}
+
+func createChat(m *Model) func() tea.Msg {
+	return func() tea.Msg {
+		chat, err := m.client.StartChat(context.Background(), &pb.User{Id: m.available_users.Items()[m.available_users.Index()].(Available).user.GetId()})
+		if err != nil {
+			m.err = err
+		}
+
+		fetchExistingChats(m)()
+
+		m.state = existing_chats
+		for i, item := range m.existing_chats.Items() {
+			if item.(Chat).id == chat.GetId() {
+				m.chat_index = i
+				break
+			}
+		}
+
+		loadChat(m)()
+
+		return nil
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -162,32 +227,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.initList(msg.Width, msg.Height)
+
+	case ConnectedMessage:
+		command = fetchAvailableUsers(&m)
+		commands = append(commands, command)
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "l":
 			m.state = available_users
+
 		case "c":
 			m.state = existing_chats
+
 		case "enter", " ":
 			switch m.state {
 			case available_users:
-				// TODO: Ask server to do just that
-				fmt.Printf("Creating chat with user")
+				command = createChat(&m)
+				commands = append(commands, command)
+
 			case existing_chats:
-				// TODO: Refresh messages in chat
 				m.state = chat
 				m.chat_index = m.existing_chats.Index()
-				items := m.existing_chats.Items()
-				chat := items[m.chat_index].(Chat)
-				messages := make([]string, len(chat.messages))
-				for _, v := range chat.messages {
-					messages = append(messages, fmt.Sprintf("%s: %s", v.sender, v.content))
-				}
-
-				m.chat_viewport.SetContent(strings.Join(messages, "\n"))
-				m.chat_viewport.GotoBottom()
-				fmt.Printf("Selected chat %d", m.chat_index)
-				//commands = append(commands, m.chat_textarea.Cursor.BlinkCmd())
+				command = loadChat(&m)
+				commands = append(commands, command)
 			}
 		}
 	}
@@ -216,7 +279,7 @@ func (m Model) RenderChat() string {
 	var output, title strings.Builder
 
 	title.WriteString("Chat with ")
-	title.WriteString(m.existing_chats.Items()[m.chat_index].(Chat).username)
+	title.WriteString(m.existing_chats.Items()[m.chat_index].(Chat).id)
 
 	output.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("#663399")).Render(title.String()))
 
@@ -245,6 +308,10 @@ func (m Model) View() string {
 }
 
 func main() {
+	var a pb.Empty
+
+	fmt.Printf("Hello, world: %v", &a)
+
 	m := New()
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {

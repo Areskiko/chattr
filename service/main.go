@@ -1,138 +1,29 @@
-package main
+package service
 
 import (
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/netip"
-	"strings"
-	"sync"
-	"time"
 
-	pb "github.com/areskiko/thatch/proto"
+	external "github.com/areskiko/thatch/proto/inter"
+	internal "github.com/areskiko/thatch/proto/intra"
+	"google.golang.org/grpc"
 )
 
 var (
-	username      string       = "nordmann#0000"
-	mainPort      uint16       = 8001
-	discoveryPort uint16       = 8000
-	subnetMask    uint8        = 24
-	chats         []pb.Chat = make([]pb.Chat, 0)
-	chatsMutex    sync.Mutex
-	users         []pb.User = make([]pb.User, 0)
-	usersMutex    sync.Mutex
+	username          string = "nordmann#0000"
+	communicationPort uint16 = 8001
+	scanningPort      uint16 = 8000
+	subnetMask        uint8  = 24
+	chats             map[string]*internal.Chat
+	users             map[string]*internal.User
 )
 
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
+const INTERNAL_SOCKET = "/tmp/thatch.sock"
 
-	// Handle incoming data here
-	buffer := make([]byte, 1024)
-	_, err := conn.Read(buffer)
-	if err != nil {
-		return
-	}
-
-	recipient := string(buffer)
-	newChat := slib.NewChat([]string{recipient}, conn)
-
-	chatsMutex.Lock()
-	chats = append(chats, newChat)
-	chatsMutex.Unlock()
-
-	for {
-		_, err := conn.Read(buffer)
-		if err != nil {
-			return
-		}
-
-		content := string(buffer)
-
-		newChat.Push(recipient, content)
-	}
-
-}
-
-func makeDiscoverable() {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", discoveryPort))
-	if err != nil {
-		return
-	}
-
-	defer listener.Close()
-
-	for {
-		// Wait for a connection
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection:", err)
-			continue
-		}
-
-		defer conn.Close()
-
-		msg := make([]byte, 2)
-		binary.LittleEndian.PutUint16(msg, mainPort)
-
-		conn.Write(msg)
-		conn.Write([]byte(username))
-	}
-}
-
-func listenForConnections() {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", mainPort))
-	if err != nil {
-		return
-	}
-	defer listener.Close()
-
-	for {
-		// Wait for a connection
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection:", err)
-			continue
-		}
-
-		go handleConnection(conn)
-	}
-}
-
-func reachOut(address net.Addr) {
-	msg := make([]byte, 2)
-	conn, err := net.Dial(address.Network(), address.String())
-
-	if err != nil {
-		return
-	}
-
-	defer conn.Close()
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-
-	_, err = conn.Read(msg)
-	if err != nil {
-		return
-	}
-
-	port := binary.LittleEndian.Uint16(msg)
-
-	_, err = conn.Read(msg)
-	if err != nil {
-		return
-	}
-
-	user := string(msg)
-	sport := fmt.Sprintf("%s:%d", strings.Split(address.String(), ":")[0], port)
-	addr, err := net.ResolveTCPAddr("tcp", sport)
-	if err != nil {
-		return
-	}
-
-	usersMutex.Lock()
-	users = append(users, slib.NewUser(user, addr))
-	usersMutex.Unlock()
+func reachOut(addr *net.TCPAddr) {
 }
 
 func discover() {
@@ -161,7 +52,7 @@ func discover() {
 			break
 		}
 
-		ad, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", addr.String(), discoveryPort))
+		ad, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", addr.String(), scanningPort))
 		if err != nil {
 			log.Printf("Error resolving %s: %s", addr.String(), err)
 			return
@@ -172,52 +63,46 @@ func discover() {
 	}
 }
 
-func controll() {
-	listener, err := net.Listen("unix", "/tmp/chattr")
-	if err != nil {
-		log.Fatalf("Failed to create local listener: %s", err)
-	}
-	defer listener.Close()
-
-	buffer := make([]byte, 1024)
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection", err)
-			continue
-		}
-
-		defer conn.Close()
-
-		for {
-
-			_, err = conn.Read(buffer)
-			if err != nil {
-				fmt.Println("Error reading command", err)
-				break
-			}
-
-			// TODO: handle commands
-			content := string(buffer)
-			conn.Write([]byte(fmt.Sprintf("Received: %s", content)))
-
-		}
-
-	}
-}
-
 func main() {
-
 	username = *flag.String("u", "nordmann", "Username to display for others")
-	mainPort = uint16(*flag.Uint("p", 8001, "The port used to communicate with other users"))
-	discoveryPort = uint16(*flag.Uint("d", 8000, "The port others can use to discover you"))
+	communicationPort = uint16(*flag.Uint("p", 8001, "The port used to communicate with other users"))
+	scanningPort = uint16(*flag.Uint("d", 8000, "The port others can use to discover you"))
 	subnetMask = uint8(*flag.Uint("m", 24, "The subnet mask"))
 
-	log.Println("Service started")
-	go listenForConnections()
-	go makeDiscoverable()
+	// Find other users
 	go discover()
 
-	controll()
+	lis, err := net.Listen("unix", INTERNAL_SOCKET)
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+
+	// Listen to client
+	var opts []grpc.ServerOption
+	grpcServer := grpc.NewServer(opts...)
+	internal.RegisterInternalServer(
+		grpcServer,
+		&internalServer{
+			internal.UnimplementedInternalServer{},
+			&users, &chats,
+		},
+	)
+	go grpcServer.Serve(lis)
+
+	// Listen to other users
+	lis, err = net.Listen("tcp", fmt.Sprintf(":%d", communicationPort))
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+
+	grpcServer = grpc.NewServer(opts...)
+	external.RegisterExternalServer(
+		grpcServer,
+		&externalServer{
+			external.UnimplementedExternalServer{},
+		},
+	)
+	go grpcServer.Serve(lis)
+
+	log.Println("Service started")
 }

@@ -3,7 +3,6 @@ module github.com/areskiko/thatch/tui
 go 1.22.0
 
 require (
-	github.com/areskiko/thatch v0.0.0
 	github.com/charmbracelet/bubbletea v0.25.0
 )
 
