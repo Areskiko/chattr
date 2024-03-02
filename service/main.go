@@ -80,10 +80,10 @@ func main() {
 	// Listen to client
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
-	internal.RegisterInternalServer(
+	internal.RegisterInternalServiceServer(
 		grpcServer,
 		&internalServer{
-			internal.UnimplementedInternalServer{},
+			internal.UnimplementedInternalServiceServer{},
 			&users, &chats,
 		},
 	)
@@ -96,10 +96,10 @@ func main() {
 	}
 
 	grpcServer = grpc.NewServer(opts...)
-	external.RegisterExternalServer(
+	external.RegisterExternalServiceServer(
 		grpcServer,
 		&externalServer{
-			external.UnimplementedExternalServer{},
+			external.UnimplementedExternalServiceServer{},
 		},
 	)
 	go grpcServer.Serve(lis)

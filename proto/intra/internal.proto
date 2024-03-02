@@ -1,45 +1,48 @@
 syntax = "proto3";
 
-package internal;
+package intra;
 
 option go_package = "github.com/areskiko/thatch/proto/intra";
 
-service Internal {
-	rpc GetUsers(Empty) returns (Users) {}
+service InternalService {
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse) {}
 
-	rpc GetChats(Empty) returns (ChatIds) {}
-	rpc GetChat(GetChatRequest) returns (Chat) {}
+  rpc GetChats(GetChatsRequest) returns (GetChatsResponse) {}
+  rpc GetChat(GetChatRequest) returns (GetChatResponse) {}
 
-	rpc SendMessage(Message) returns (Empty) {}
-	rpc StartChat(User) returns (Chat) {}
-
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {}
+  rpc StartChat(StartChatRequest) returns (StartChatResponse) {}
 }
 
-message Empty {}
+message GetUsersRequest {}
+message GetChatsRequest {}
+message SendMessageResponse {}
+message StartChatResponse {}
 
-message Message {
-	string sender = 1;
-	string text = 4;
+message StartChatRequest { string user_id = 1; }
+
+message SendMessageRequest {
+  string sender = 1;
+  string text = 4;
 }
 
 message User {
-	string id = 1;
-	string name = 2;
+  string id = 1;
+  string name = 2;
 }
 
-message Users {
-	repeated User users = 1;
+message GetUsersResponse { repeated User users = 1; }
+
+message GetChatResponse {
+  string id = 1;
+  repeated Message messages = 2;
 }
 
-message Chat {
-	string id = 1;
-	repeated Message messages = 2;
-}
+message GetChatRequest { string chat_id = 1; }
 
-message GetChatRequest {
-	string chat_id = 1;
-}
+message GetChatsResponse { repeated string chat_ids = 1; }
 
-message ChatIds {
-	repeated string chat_ids = 1;
+message Message {
+  string sender = 1;
+  string text = 2;
 }

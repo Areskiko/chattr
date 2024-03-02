@@ -9,7 +9,7 @@ import (
 
 
 type internalServer struct {
-	internal.UnimplementedInternalServer
+	internal.UnimplementedInternalServiceServer
 	users *map[string]*internal.User
 	chats *map[string]*internal.Chat
 }

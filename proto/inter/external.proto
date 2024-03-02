@@ -1,15 +1,15 @@
 syntax = "proto3";
 
-package external;
+package inter;
 
-option go_package = "github.com/areskiko/thatch/proto/external";
+option go_package = "github.com/areskiko/thatch/proto/inter";
 
-service External {
-	rpc Send(Message) returns (Empty) {}
+service ExternalService {
+	rpc Send(SendRequest) returns (SendResponse) {}
 }
 
-message Empty {}
+message SendResponse {}
 
-message Message {
+message SendRequest {
 	string message = 1;
 }

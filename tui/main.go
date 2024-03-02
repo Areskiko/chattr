@@ -84,7 +84,7 @@ type Model struct {
 	available_users list.Model
 	existing_chats  list.Model
 	err             error
-	client          pb.InternalClient
+	client          pb.InternalServiceClient
 }
 
 type ConnectedMessage struct{}
@@ -130,7 +130,7 @@ func (m Model) Init() tea.Cmd {
 			m.err = err
 		}
 
-		client := pb.NewInternalClient(conn)
+		client := pb.NewInternalServiceClient(conn)
 		m.client = client
 		return ConnectedMessage{}
 	}

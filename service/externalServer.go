@@ -7,7 +7,7 @@ import (
 )
 
 type externalServer struct {
-	external.UnimplementedExternalServer
+	external.UnimplementedExternalServiceServer
 }
 
 // Send implements external.ExternalServer.
