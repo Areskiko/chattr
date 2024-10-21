@@ -6,10 +6,23 @@ option go_package = "github.com/areskiko/thatch/proto/inter";
 
 service ExternalService {
 	rpc Send(SendRequest) returns (SendResponse) {}
+	rpc Handshake(HandshakeRequest) returns (HandshakeResponse) {}
 }
 
 message SendResponse {}
 
 message SendRequest {
 	string message = 1;
+	string signature = 2;
+	string authentication = 3;
+}
+
+message HandshakeRequest {
+	string authentication = 1;
+	string name = 2;
+	string address = 3;
+}
+message HandshakeResponse {
+	string authentication = 1;
+	string name = 2;
 }

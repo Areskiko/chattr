@@ -1,4 +1,4 @@
-.PHONY: all check clean tui service
+.PHONY: all check clean tui service up down
 
 BUILD_DIR = build
 
@@ -10,8 +10,8 @@ GRPC_GO = $(patsubst $(PROTO_SRC_DIR)/%.proto, $(PROTO_SRC_DIR)/%_grpc.pb.go, $(
 INTERNAL = $(PROTO_SRC_DIR)/intra/internal.pb.go $(PROTO_SRC_DIR)/intra/internal_grpc.pb.go
 EXTERNAL = $(PROTO_SRC_DIR)/inter/external.pb.go $(PROTO_SRC_DIR)/inter/external_grpc.pb.go
 
-TUI_GO = $(wildcard .tui/*.go)
-SERVICE_GO = $(wildcard .service/*.go)
+TUI_GO = $(wildcard tui/*.go)
+SERVICE_GO = $(wildcard service/*.go)
 
 
 all: tui service
@@ -36,7 +36,14 @@ check:
 	go vet ./service
 
 clean:
-	@ rm -rf $(BUILD_DIR)
-	@ rm -f $(PROTO_GO)
-	@ rm -f $(GRPC_GO)
+	-@ rm -rf $(BUILD_DIR)
+	-@ rm -f $(PROTO_GO)
+	-@ rm -f $(GRPC_GO)
 
+up: $(BUILD_DIR)/tui $(BUILD_DIR)/service
+	$(BUILD_DIR)/service --socket /tmp/thatch1.sock -p 9000 -d 9001 -u Alice#0001 > $(BUILD_DIR)/service1.log &
+	$(BUILD_DIR)/service --socket /tmp/thatch2.sock -p 9001 -d 9000 -u Bob#0001 > $(BUILD_DIR)/service2.log &
+
+down:
+	-@ killall service 2> /dev/null
+	-@ rm /tmp/thatch1.sock /tmp/thatch2.sock 2> /dev/null

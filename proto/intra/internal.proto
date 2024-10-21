@@ -14,10 +14,15 @@ service InternalService {
   rpc StartChat(StartChatRequest) returns (StartChatResponse) {}
 }
 
+service ControlService {
+	rpc Scan(ScanRequest) returns (ScanResponse) {}
+	rpc Kill(KillRequest) returns (KillResponse) {}
+}
+
 message GetUsersRequest {}
 message GetChatsRequest {}
 message SendMessageResponse {}
-message StartChatResponse {}
+message StartChatResponse { string chat_id = 1; }
 
 message StartChatRequest { string user_id = 1; }
 
@@ -33,9 +38,13 @@ message User {
 
 message GetUsersResponse { repeated User users = 1; }
 
-message GetChatResponse {
+message Chat {
   string id = 1;
   repeated Message messages = 2;
+}
+
+message GetChatResponse {
+	Chat chat = 1;
 }
 
 message GetChatRequest { string chat_id = 1; }
@@ -46,3 +55,12 @@ message Message {
   string sender = 1;
   string text = 2;
 }
+
+message ScanRequest {}
+message ScanResponse {
+	int32 new = 1;
+	int32 removed = 2;
+}
+
+message KillRequest {}
+message KillResponse {}

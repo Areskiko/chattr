@@ -1,4 +1,4 @@
-package service
+package main
 
 import (
 	"context"
@@ -14,7 +14,7 @@ type internalServer struct {
 	chats *map[string]*internal.Chat
 }
 
-func (s *internalServer) GetChat(context context.Context, request *internal.GetChatRequest) (*internal.Chat, error) {
+func (s *internalServer) GetChat(context context.Context, request *internal.GetChatRequest) (*internal.GetChatResponse, error) {
 	id := request.GetChatId()
 	chat := (*s.chats)[id]
 
@@ -22,11 +22,11 @@ func (s *internalServer) GetChat(context context.Context, request *internal.GetC
 		return nil, fmt.Errorf("Chat with id %s not found", id)
 	}
 
-	return chat, nil
+	return &internal.GetChatResponse{Chat: chat}, nil
 }
 
-func (s *internalServer) GetChats(context.Context, *internal.Empty) (*internal.ChatIds, error) {
-	ids := &internal.ChatIds{}
+func (s *internalServer) GetChats(context.Context, *internal.GetChatsRequest) (*internal.GetChatsResponse, error) {
+	ids := &internal.GetChatsResponse{}
 	for id := range *s.chats {
 		ids.ChatIds = append(ids.ChatIds, id)
 	}
@@ -34,8 +34,8 @@ func (s *internalServer) GetChats(context.Context, *internal.Empty) (*internal.C
 }
 
 // GetUsers implements proto.InternalServerServer.
-func (s *internalServer) GetUsers(context.Context, *internal.Empty) (*internal.Users, error) {
-	usrs := &internal.Users{}
+func (s *internalServer) GetUsers(context.Context, *internal.GetUsersRequest) (*internal.GetUsersResponse, error) {
+	usrs := &internal.GetUsersResponse{}
 	for _, user := range *s.users {
 		usrs.Users = append(usrs.Users, user)
 	}
@@ -44,13 +44,13 @@ func (s *internalServer) GetUsers(context.Context, *internal.Empty) (*internal.U
 }
 
 // SendMessage implements proto.InternalServerServer.
-func (s *internalServer) SendMessage(context.Context, *internal.Message) (*internal.Empty, error) {
+func (s *internalServer) SendMessage(context.Context, *internal.SendMessageRequest) (*internal.SendMessageResponse, error) {
 	println("unimplemented")
 	return nil, nil
 }
 
 // StartChat implements proto.InternalServerServer.
-func (s *internalServer) StartChat(context.Context, *internal.User) (*internal.Chat, error) {
+func (s *internalServer) StartChat(context.Context, *internal.StartChatRequest) (*internal.StartChatResponse, error) {
 	println("unimplemented")
 	return nil, nil
 }

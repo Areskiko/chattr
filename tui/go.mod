@@ -2,14 +2,12 @@ module github.com/areskiko/thatch/tui
 
 go 1.22.0
 
-require (
-	github.com/charmbracelet/bubbletea v0.25.0
-)
+require github.com/charmbracelet/bubbletea v0.25.0
 
 require (
+	github.com/alecthomas/kong v0.8.1 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/bubbles v0.17.1 // indirect
-	github.com/charmbracelet/bubbletea v0.25.0 // indirect
 	github.com/charmbracelet/lipgloss v0.9.1 // indirect
 	github.com/containerd/console v1.0.4-0.20230313162750-1ae8d489ac81 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
